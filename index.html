@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body {
+      background-color: #1e1e2f;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      color: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      flex-direction: column;
+    }
+
+    .container {
+      background-color: #2c2c3e;
+      padding: 20px 25px;
+      border-radius: 10px;
+      width: 420px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    .header {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #ffffff;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+      margin-top: 10px;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 5px 8px;
+      font-size: 13px;
+      border: none;
+      border-radius: 6px;
+      background-color: #1a1a28;
+      color: #f0f0f0;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border: 1px solid #3a82f7;
+    }
+
+    .send-button {
+      margin-top: 14px;
+      width: 100%;
+      padding: 8px;
+      background-color: #3a82f7;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .send-button:hover {
+      background-color: #2c66c3;
+    }
+
+    .message-status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    /* Footer Link */
+    .footer-link {
+      position: absolute;
+      bottom: 10px;
+      text-align: center;
+      width: 100%;
+    }
+
+    .footer-link a {
+      color: #3a82f7;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .footer-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">Penguin Webhook Nuker</div>
+    <label for="webhook-url">Webhook URL</label>
+    <input type="text" id="webhook-url" class="input-field" />
+
+    <label for="message">Message</label>
+    <input type="text" id="message" class="input-field" />
+
+    <label for="message-count">Number of Times (1-200)</label>
+    <input type="number" id="message-count" class="input-field" min="1" max="200" value="1" />
+
+    <button onclick="sendMessage()" class="send-button">Send Message</button>
+
+    <div id="message-status" class="message-status">Messages Sent: (0/0)</div>
+  </div>
+
+  <!-- Footer Link -->
+  <div class="footer-link">
+    <a href="https://discord.gg/6jCfFFjsAQ" target="_blank" rel="noopener noreferrer">Join our Support Server</a>
+  </div>
+
+  <script>
+    let messageQueue = [];
+    let messagesSent = 0;
+    const rateLimitThreshold = 190; // Send until 190 messages, then wait
+    const cooldownTime = 60000; // 1 minute cooldown
+    const delay = 1000; // Delay between each message in ms (1 second)
+
+    function sendMessage() {
+      const webhookUrl = document.getElementById("webhook-url").value;
+      const message = document.getElementById("message").value;
+      const numberOfTimesToSend = parseInt(document.getElementById("message-count").value);
+
+      if (webhookUrl && message && numberOfTimesToSend > 0 && numberOfTimesToSend <= 200) {
+        messageQueue = Array(numberOfTimesToSend).fill({ webhookUrl, message });
+        messagesSent = 0;
+        updateStatus();
+        sendMessages();
+      } else {
+        console.error("Please provide valid inputs.");
+      }
+    }
+
+    function sendMessages() {
+      if (messageQueue.length > 0) {
+        const { webhookUrl, message } = messageQueue.shift();
+        sendMessageToWebhook(webhookUrl, message);
+      } else {
+        console.log("All messages sent!");
+      }
+    }
+
+    function sendMessageToWebhook(webhookUrl, message) {
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: message })
+      })
+      .then(response => {
+        if (response.ok) {
+          messagesSent++;
+          updateStatus();
+
+          if (messagesSent >= rateLimitThreshold) {
+            setTimeout(resumeSending, cooldownTime);
+            return;
+          }
+
+          if (messageQueue.length > 0) {
+            setTimeout(sendMessages, delay);
+          }
+        } else if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') * 1000 || cooldownTime;
+          setTimeout(resumeSending, retryAfter);
+        } else {
+          console.error("Failed to send message.");
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+      });
+    }
+
+    function resumeSending() {
+      sendMessages();
+    }
+
+    function updateStatus() {
+      const totalMessages = messageQueue.length + messagesSent;
+      document.getElementById("message-status").textContent = `Messages Sent: (${messagesSent}/${totalMessages})`;
+    }
+  </script>
+</body>
+</html>
